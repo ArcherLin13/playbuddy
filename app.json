@@ -1,0 +1,68 @@
+{
+  "expo": {
+    "name": "练琴伙伴",
+    "slug": "playbuddy",
+    "scheme": "playbuddy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#120E0B"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.conica.playbuddy",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "需要用麦克风检测练琴声音，统计有效练习时间。",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "package": "com.conica.playbuddy",
+      "adaptiveIcon": {
+        "backgroundColor": "#120E0B",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "backgroundColor": "#120E0B"
+    },
+    "plugins": [
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "需要用麦克风检测练琴声音，统计有效练习时间。"
+        }
+      ],
+      "expo-sharing",
+      "expo-web-browser",
+      [
+        "expo-notifications",
+        {
+          "sounds": [],
+          "enableBackgroundRemoteNotifications": false
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f4b5ad8b-1b0f-46f8-af96-6a98f0bd1bc0"
+      }
+    },
+    "owner": "conica0303"
+  }
+}
