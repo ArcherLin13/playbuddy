@@ -17,6 +17,7 @@ import {
   replaceSessions,
   rescoreAllSessions,
   saveSession,
+  settlePendingSessions,
 } from './src/storage/history';
 import { loadSettings, saveSettings } from './src/storage/settings';
 import { setOutputVolume } from './src/audio/audioMode';
@@ -25,7 +26,7 @@ import { ShareCardHost } from './src/history/ShareCardHost';
 import { colors } from './src/theme';
 import { DEFAULT_SETTINGS, type AppSettings, type PracticeSession } from './src/types';
 import { formatDate } from './src/format';
-import { sumEarnedYuan } from './src/score/dayMoney';
+import { sumPendingYuan, sumSettledYuan } from './src/score/dayMoney';
 import { isFirebaseConfigured, isGoogleAuthConfigured } from './src/sync/firebaseConfig';
 import {
   loadAccountDisplayName,
@@ -90,8 +91,12 @@ export default function App() {
       const s = await loadSettings();
       setSettings(s);
       setOutputVolume(s.outputVolume);
-      const local = await loadSessions();
-      setSessions(local);
+      const rescored = await rescoreAllSessions(
+        s.dailyTargetMinutes,
+        s.dailyMoneyCap,
+        s.moneyMinMinutes
+      );
+      setSessions(rescored);
     })();
   }, []);
 
@@ -269,6 +274,26 @@ export default function App() {
     }
   };
 
+  const doSettlePending = () => {
+    void (async () => {
+      try {
+        const result = await settlePendingSessions();
+        setSessions(result.sessions);
+        if (accountEmail && isFirebaseConfigured()) {
+          void syncPracticeRecords(result.sessions).catch(() => undefined);
+        }
+        Alert.alert(
+          '已标记发放',
+          result.settledCount > 0
+            ? `已结算 ${result.settledCount} 天，合计 ${result.settledYuan} 元`
+            : '没有待发放金额'
+        );
+      } catch (e) {
+        Alert.alert('失败', e instanceof Error ? e.message : '无法结算');
+      }
+    })();
+  };
+
   const doSignOut = () => {
     Alert.alert('退出登录', '本机记录会保留，但不再与云端账号同步。', [
       { text: '取消', style: 'cancel' },
@@ -342,7 +367,8 @@ export default function App() {
             todayYuan={
               sessions.find((s) => dayKey(s.startedAt) === dayKey(Date.now()))?.earnedYuan ?? 0
             }
-            totalYuan={sumEarnedYuan(sessions)}
+            pendingYuan={sumPendingYuan(sessions)}
+            settledYuan={sumSettledYuan(sessions)}
             streakDays={
               sessions.find((s) => dayKey(s.startedAt) === dayKey(Date.now()))?.streakDays ?? 0
             }
@@ -353,6 +379,7 @@ export default function App() {
             googleReady={googleReady}
             syncBusy={syncBusy}
             onChange={updateSettings}
+            onSettlePending={doSettlePending}
             onGoogleSignIn={() => void doGoogleSignIn()}
             onRegister={(email, password) => void doRegister(email, password)}
             onSignIn={(email, password) => void doSignIn(email, password)}

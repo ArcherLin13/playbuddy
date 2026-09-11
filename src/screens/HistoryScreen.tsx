@@ -13,7 +13,9 @@ import { DEFAULT_DAILY_TARGET_MINUTES, scoreDay } from '../score/dayScore';
 import {
   DEFAULT_DAILY_MONEY_CAP,
   DEFAULT_MONEY_MIN_MINUTES,
+  formatYuan,
   moneyFromScore,
+  sumEarnedYuan,
 } from '../score/dayMoney';
 import { colors, radius } from '../theme';
 import type { PracticeSession } from '../types';
@@ -39,6 +41,14 @@ type Level =
   | { name: 'months' }
   | { name: 'weeks'; month: MonthGroup }
   | { name: 'days'; month: MonthGroup; week: WeekGroup };
+
+function sessionsYuan(list: { session: PracticeSession }[]): number {
+  return sumEarnedYuan(list.map((d) => d.session));
+}
+
+function monthYuan(month: MonthGroup): number {
+  return sumEarnedYuan(month.weeks.flatMap((w) => w.days).map((d) => d.session));
+}
 
 export function HistoryScreen({
   sessions,
@@ -121,6 +131,7 @@ export function HistoryScreen({
                 title={month.label}
                 sub={`${month.dayCount} 天  ·  ${month.boutCount} 次  ·  ${month.segmentCount} 段`}
                 time={formatDuration(month.effectiveMs)}
+                money={formatYuan(monthYuan(month))}
                 onPress={() => setLevelAndPath({ name: 'weeks', month })}
                 onShare={() => void shareMonthReport(month, displayName)}
               />
@@ -134,6 +145,7 @@ export function HistoryScreen({
                 title={week.label}
                 sub={`${week.rangeLabel}  ·  ${week.dayCount} 天  ·  ${week.boutCount} 次`}
                 time={formatDuration(week.effectiveMs)}
+                money={formatYuan(sessionsYuan(week.days))}
                 onPress={() => setLevelAndPath({ name: 'days', month: level.month, week })}
                 onShare={() => void shareWeekReport(week, displayName)}
               />
@@ -180,12 +192,14 @@ function Row({
   title,
   sub,
   time,
+  money,
   onPress,
   onShare,
 }: {
   title: string;
   sub: string;
   time: string;
+  money?: string;
   onPress: () => void;
   onShare: () => void;
 }) {
@@ -195,7 +209,10 @@ function Row({
         <Text style={styles.rowTitle}>{title}</Text>
         <Text style={styles.rowSub}>{sub}</Text>
       </Pressable>
-      <Text style={styles.rowTime}>{time}</Text>
+      <View style={styles.dayAside}>
+        {money ? <Text style={styles.rowMoney}>{money}</Text> : null}
+        <Text style={styles.rowTime}>{time}</Text>
+      </View>
       <Pressable onPress={onShare} style={styles.shareBtn}>
         <Text style={styles.shareText}>分享</Text>
       </Pressable>
@@ -228,6 +245,7 @@ function DayRow({
         <Text style={styles.rowTitle}>{day.label}</Text>
         <Text style={styles.rowSub}>
           {day.boutCount} 次练习  ·  {day.segmentCount} 个有效片段
+          {day.session.settled ? '  ·  已发放' : ''}
         </Text>
       </Pressable>
       <View style={styles.dayAside}>
@@ -319,6 +337,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontVariant: ['tabular-nums'],
     fontWeight: '600',
+  },
+  rowMoney: {
+    color: colors.gold,
+    fontSize: 16,
+    fontVariant: ['tabular-nums'],
+    fontWeight: '700',
   },
   dayAside: {
     alignItems: 'flex-end',

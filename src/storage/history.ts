@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { deleteSessionRecordings } from '../audio/sessionCapture';
-import { applyStreakToMoney, moneyFromScore } from '../score/dayMoney';
+import { applyStreakToMoney, moneyFromDuration } from '../score/dayMoney';
 import { scoreDay } from '../score/dayScore';
 import { computeStreakDays, streakMultiplier } from '../score/streak';
 import { DEFAULT_SETTINGS, type Instrument, type PracticeSession } from '../types';
@@ -91,6 +91,28 @@ export async function replaceSessions(sessions: PracticeSession[]): Promise<Prac
   return next;
 }
 
+/** Mark all unpaid days with earnings as settled (parent payout). */
+export async function settlePendingSessions(): Promise<{
+  sessions: PracticeSession[];
+  settledCount: number;
+  settledYuan: number;
+}> {
+  const all = await loadSessions();
+  const now = Date.now();
+  let settledCount = 0;
+  let settledYuan = 0;
+  const next = all.map((s) => {
+    const yuan = s.earnedYuan ?? 0;
+    if (s.settled || yuan <= 0) return s;
+    settledCount += 1;
+    settledYuan += yuan;
+    return { ...s, settled: true, settledAt: now, updatedAt: now };
+  });
+  settledYuan = Math.round(settledYuan * 10) / 10;
+  await AsyncStorage.setItem(KEY, JSON.stringify(next));
+  return { sessions: next, settledCount, settledYuan };
+}
+
 export async function deleteSession(id: string): Promise<PracticeSession[]> {
   const all = await loadSessions();
   const target = all.find((s) => s.id === id);
@@ -117,6 +139,8 @@ export function mergeDaySessions(a: PracticeSession, b: PracticeSession): Practi
     wallClockMs: a.wallClockMs + b.wallClockMs,
     segments: [...a.segments, ...b.segments].sort((x, y) => x.startAt - y.startAt),
     boutCount: (a.boutCount ?? 1) + (b.boutCount ?? 1),
+    settled: Boolean(a.settled || b.settled),
+    settledAt: Math.max(a.settledAt ?? 0, b.settledAt ?? 0) || undefined,
   };
 }
 
@@ -134,7 +158,7 @@ export function attachRewards(
   );
   const streakDays = computeStreakDays(roster, session.startedAt, moneyMinMinutes, dayKey);
   const mult = streakMultiplier(streakDays);
-  const baseYuan = moneyFromScore(total, dailyMoneyCap, session.effectiveMs, moneyMinMinutes);
+  const baseYuan = moneyFromDuration(session.effectiveMs, dailyMoneyCap, moneyMinMinutes);
   const earnedYuan = applyStreakToMoney(baseYuan, mult, dailyMoneyCap);
   return {
     ...scored,

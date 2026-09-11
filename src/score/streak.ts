@@ -3,7 +3,7 @@ import type { PracticeSession } from '../types';
 import { DEFAULT_SETTINGS } from '../types';
 
 /**
- * 连击达标：当天有效时长达到起薪门槛（默认 30 分钟）。
+ * 连击达标：当天有效时长达到起薪门槛（默认 15 分钟）。
  * 与零花钱门槛一致，避免「练几秒也进连击」。
  */
 export function dayQualifiesForStreak(

@@ -82,6 +82,9 @@ export function mergeSessionsPreservingAudio(
     baseYuan: remote.baseYuan ?? local?.baseYuan,
     streakDays: remote.streakDays ?? local?.streakDays,
     streakMultiplier: remote.streakMultiplier ?? local?.streakMultiplier,
+    settled: Boolean(remote.settled || local?.settled),
+    settledAt:
+      Math.max(remote.settledAt ?? 0, local?.settledAt ?? 0) || undefined,
     updatedAt,
   };
 }

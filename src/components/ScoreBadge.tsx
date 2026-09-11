@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { colors, radius } from '../theme';
 import { formatStars, type DayScoreResult } from '../score/dayScore';
-import { formatYuan, meetsMoneyMinimum, minutesUntilMoney } from '../score/dayMoney';
+import { formatYuan, hardMoneyCap, meetsMoneyMinimum, minutesUntilMoney } from '../score/dayMoney';
 import { formatStreakMultiplier } from '../score/streak';
 
 type Props = {
@@ -19,13 +19,13 @@ export function ScoreBadge({
   score,
   earnedYuan,
   dailyMoneyCap,
-  moneyMinMinutes = 30,
+  moneyMinMinutes = 15,
   effectiveMs = 0,
   baseYuan,
   streakDays = 0,
   streakMultiplier = 1,
 }: Props) {
-  const hardCap = Math.round(dailyMoneyCap * 1.5 * 10) / 10;
+  const hardCap = hardMoneyCap(dailyMoneyCap);
   const atHardCap = earnedYuan >= hardCap && hardCap > 0;
   const hasStreakBonus = streakMultiplier > 1 && streakDays >= 2;
   const unlocked = meetsMoneyMinimum(effectiveMs, moneyMinMinutes);
@@ -42,7 +42,7 @@ export function ScoreBadge({
             ? '已达连击加成封顶'
             : hasStreakBonus
               ? `基础 ${formatYuan(baseYuan ?? earnedYuan)} × 连击 ${formatStreakMultiplier(streakMultiplier)}`
-              : `已过起薪线 · 基础封顶 ${formatYuan(dailyMoneyCap)}`}
+              : `只看有效时长 · 1小时¥${dailyMoneyCap} · 2小时¥${Math.round(dailyMoneyCap * 3)}`}
       </Text>
 
       {streakDays > 0 ? (

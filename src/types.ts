@@ -31,6 +31,10 @@ export type PracticeSession = {
   streakDays?: number;
   /** Money multiplier from streak (1–1.5). */
   streakMultiplier?: number;
+  /** Parent has paid out this day's allowance. */
+  settled?: boolean;
+  /** When parent marked this day settled (ms). */
+  settledAt?: number;
   /** Last local/cloud update time (ms) for sync. */
   updatedAt?: number;
 };
@@ -44,9 +48,9 @@ export type AppSettings = {
   outputVolume: number;
   /** Daily effective practice target in minutes (default 40). */
   dailyTargetMinutes: number;
-  /** Max pocket money per day in yuan (default 10). */
+  /** 1 小时有效时长对应的基准金额（默认 10；整表按此比例缩放）。 */
   dailyMoneyCap: number;
-  /** Minimum effective practice minutes before any money (default 30). */
+  /** Minimum effective practice minutes before any money (default 15). */
   moneyMinMinutes: number;
   /** Minutes of effective practice for a full-screen water fill (default 60). */
   waterFullMinutes: number;
@@ -77,7 +81,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   outputVolume: 1,
   dailyTargetMinutes: 40,
   dailyMoneyCap: 10,
-  moneyMinMinutes: 30,
+  moneyMinMinutes: 15,
   waterFullMinutes: 60,
   displayName: '',
 };

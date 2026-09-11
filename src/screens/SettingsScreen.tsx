@@ -10,7 +10,6 @@ import {
   View,
 } from 'react-native';
 import { formatYuan } from '../score/dayMoney';
-import { formatStreakMultiplier } from '../score/streak';
 import { DEFAULT_PARENT_PIN, saveParentPin, verifyParentPin } from '../storage/parentPin';
 import { isFirebaseConfigured } from '../sync/firebaseConfig';
 import { colors, radius } from '../theme';
@@ -19,13 +18,15 @@ import type { AppSettings } from '../types';
 type Props = {
   settings: AppSettings;
   todayYuan: number;
-  totalYuan: number;
+  pendingYuan: number;
+  settledYuan: number;
   streakDays: number;
   streakMultiplier: number;
   accountEmail: string | null;
   googleReady?: boolean;
   syncBusy?: boolean;
   onChange: (next: AppSettings) => void;
+  onSettlePending: () => void;
   onGoogleSignIn: () => void;
   onRegister: (email: string, password: string) => void;
   onSignIn: (email: string, password: string) => void;
@@ -47,10 +48,10 @@ const MONEY_CAPS: { label: string; value: number }[] = [
   { label: '¥20', value: 20 },
 ];
 const MONEY_MINS: { label: string; value: number }[] = [
+  { label: '15分', value: 15 },
   { label: '20分', value: 20 },
   { label: '30分', value: 30 },
   { label: '40分', value: 40 },
-  { label: '60分', value: 60 },
 ];
 const WATER_FULL: { label: string; value: number }[] = [
   { label: '40分', value: 40 },
@@ -62,13 +63,15 @@ const WATER_FULL: { label: string; value: number }[] = [
 export function SettingsScreen({
   settings,
   todayYuan,
-  totalYuan,
+  pendingYuan,
+  settledYuan,
   streakDays,
-  streakMultiplier,
+  streakMultiplier: _streakMultiplier,
   accountEmail,
   googleReady = false,
   syncBusy = false,
   onChange,
+  onSettlePending,
   onGoogleSignIn,
   onRegister,
   onSignIn,
@@ -138,21 +141,43 @@ export function SettingsScreen({
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         <View style={styles.moneyBar}>
           <View style={styles.moneyItem}>
-            <Text style={styles.moneyLabel}>今日可领</Text>
-            <Text style={styles.moneyValue}>{formatYuan(todayYuan)}</Text>
+            <Text style={styles.moneyLabel}>待发放</Text>
+            <Text style={styles.moneyValue}>{formatYuan(pendingYuan)}</Text>
             <Text style={styles.moneySub}>
-              {streakDays > 1
-                ? `连击 ${streakDays} 天 ${formatStreakMultiplier(streakMultiplier)}`
-                : `满 ${settings.moneyMinMinutes} 分钟起薪`}
+              今日可领 {formatYuan(todayYuan)}
+              {streakDays > 1 ? ` · 连击${streakDays}天` : ''}
             </Text>
           </View>
           <View style={styles.moneyDivider} />
           <View style={styles.moneyItem}>
-            <Text style={styles.moneyLabel}>累计存钱</Text>
-            <Text style={styles.moneyValue}>{formatYuan(totalYuan)}</Text>
-            <Text style={styles.moneySub}>给家长核对发放</Text>
+            <Text style={styles.moneyLabel}>已发放</Text>
+            <Text style={styles.moneyValue}>{formatYuan(settledYuan)}</Text>
+            <Text style={styles.moneySub}>家长确认过的累计</Text>
           </View>
         </View>
+        {pendingYuan > 0 ? (
+          <Pressable
+            onPress={() => {
+              if (!moneyUnlocked) {
+                Alert.alert('需要家长确认', '请先解锁下方「家长区」，再确认发放。');
+                return;
+              }
+              Alert.alert(
+                '确认发放',
+                `将把待发放 ${formatYuan(pendingYuan)} 全部标记为已发放。请确认现金已交给孩子。`,
+                [
+                  { text: '取消', style: 'cancel' },
+                  { text: '已发放', onPress: onSettlePending },
+                ]
+              );
+            }}
+            style={styles.settleBtn}
+          >
+            <Text style={styles.settleBtnText}>家长确认发放待结算</Text>
+          </Pressable>
+        ) : (
+          <Text style={styles.help}>当前没有待发放金额。</Text>
+        )}
 
         <Text style={styles.section}>呼唤练琴</Text>
         <Text style={styles.help}>停练提醒 + 连续练琴鼓励。</Text>
@@ -336,7 +361,7 @@ export function SettingsScreen({
 
             <Text style={styles.subSection}>起薪有效时长</Text>
             <Text style={styles.help}>
-              当天有效练琴未满此时间，零花钱为 ¥0。默认 30 分钟；达标后才按评分计钱。
+              当天有效练琴未满此时间，零花钱为 ¥0。默认 15 分钟。钱只看总时长，不看乐器和评分。
             </Text>
             <View style={styles.row}>
               {MONEY_MINS.map((item) => {
@@ -372,9 +397,9 @@ export function SettingsScreen({
               })}
             </View>
 
-            <Text style={styles.subSection}>每日零花钱封顶</Text>
+            <Text style={styles.subSection}>1 小时基准金额</Text>
             <Text style={styles.help}>
-              过起薪线后按评分折算。连续达标可乘系数，最高为基础封顶的 1.5 倍。
+              默认 1 小时 ¥10、2 小时 ¥30、3 小时 ¥60、4 小时 ¥100，越练越划算。连击再乘系数。改这个数会按比例缩放整张表。
             </Text>
             <View style={styles.row}>
               {MONEY_CAPS.map((item) => {
@@ -474,7 +499,19 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     paddingVertical: 14,
     paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  settleBtn: {
+    backgroundColor: colors.gold,
+    borderRadius: radius.sm,
+    paddingVertical: 12,
+    alignItems: 'center',
     marginBottom: 24,
+  },
+  settleBtnText: {
+    color: colors.bg,
+    fontWeight: '700',
+    fontSize: 15,
   },
   moneyItem: {
     flex: 1,
