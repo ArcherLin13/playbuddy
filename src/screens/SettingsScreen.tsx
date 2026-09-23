@@ -155,29 +155,6 @@ export function SettingsScreen({
             <Text style={styles.moneySub}>家长确认过的累计</Text>
           </View>
         </View>
-        {pendingYuan > 0 ? (
-          <Pressable
-            onPress={() => {
-              if (!moneyUnlocked) {
-                Alert.alert('需要家长确认', '请先解锁下方「家长区」，再确认发放。');
-                return;
-              }
-              Alert.alert(
-                '确认发放',
-                `将把待发放 ${formatYuan(pendingYuan)} 全部标记为已发放。请确认现金已交给孩子。`,
-                [
-                  { text: '取消', style: 'cancel' },
-                  { text: '已发放', onPress: onSettlePending },
-                ]
-              );
-            }}
-            style={styles.settleBtn}
-          >
-            <Text style={styles.settleBtnText}>家长确认发放待结算</Text>
-          </Pressable>
-        ) : (
-          <Text style={styles.help}>当前没有待发放金额。</Text>
-        )}
 
         <Text style={styles.section}>呼唤练琴</Text>
         <Text style={styles.help}>停练提醒 + 连续练琴鼓励。</Text>
@@ -315,7 +292,8 @@ export function SettingsScreen({
         {!moneyUnlocked ? (
           <View style={styles.lockCard}>
             <Text style={styles.help}>
-              修改目标时长、进度环满圈、起薪线和封顶金额需要家长密码。初始密码：{DEFAULT_PARENT_PIN}
+              确认发放、修改目标时长、进度环满圈、起薪线和封顶金额需要家长密码。初始密码：
+              {DEFAULT_PARENT_PIN}
             </Text>
             <TextInput
               value={pinInput}
@@ -339,6 +317,30 @@ export function SettingsScreen({
                 <Text style={styles.lockBtnText}>重新锁定</Text>
               </Pressable>
             </View>
+
+            <Text style={styles.subSection}>确认发放</Text>
+            <Text style={styles.help}>
+              将待发放 {formatYuan(pendingYuan)} 标记为已发放。请确认现金已交给孩子。
+            </Text>
+            {pendingYuan > 0 ? (
+              <Pressable
+                onPress={() => {
+                  Alert.alert(
+                    '确认发放',
+                    `将把待发放 ${formatYuan(pendingYuan)} 全部标记为已发放。请确认现金已交给孩子。`,
+                    [
+                      { text: '取消', style: 'cancel' },
+                      { text: '已发放', onPress: onSettlePending },
+                    ]
+                  );
+                }}
+                style={styles.settleBtn}
+              >
+                <Text style={styles.settleBtnText}>家长确认发放待结算</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.help}>当前没有待发放金额。</Text>
+            )}
 
             <Text style={styles.subSection}>每日有效练琴目标</Text>
             <Text style={styles.help}>
@@ -499,14 +501,14 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     paddingVertical: 14,
     paddingHorizontal: 14,
-    marginBottom: 12,
+    marginBottom: 24,
   },
   settleBtn: {
     backgroundColor: colors.gold,
     borderRadius: radius.sm,
     paddingVertical: 12,
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 8,
   },
   settleBtnText: {
     color: colors.bg,

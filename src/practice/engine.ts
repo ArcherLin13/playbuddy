@@ -73,6 +73,32 @@ export class PracticeEngine {
     };
   }
 
+  /**
+   * Snapshot for crash recovery without ending the live session.
+   * Includes the currently open segment (if any) as of `now`.
+   */
+  checkpoint(now: number, instrument: Instrument = 'violin'): PracticeSession {
+    const segments = [...this.segments];
+    if (this.currentStart != null && this.currentSoundingMs >= 250) {
+      const endAt = this.lastPlayingAt != null ? Math.max(this.lastPlayingAt, now) : now;
+      segments.push({
+        startAt: this.currentStart,
+        endAt,
+        durationMs: this.currentSoundingMs,
+      });
+    }
+    return {
+      id: `${this.startedAt}-draft`,
+      startedAt: this.startedAt,
+      endedAt: now,
+      instrument,
+      effectiveMs: this.totalSoundingMs,
+      wallClockMs: Math.max(0, now - this.startedAt),
+      segments,
+      boutCount: 1,
+    };
+  }
+
   snapshot(now: number = this.lastTickAt): EngineSnapshot {
     const quietMs =
       this.lastPlayingAt == null

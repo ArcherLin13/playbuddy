@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text } from 'react-native';
 import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import { enterPlaybackAudioMode, getOutputVolume } from '../audio/audioMode';
 import { colors, radius } from '../theme';
@@ -11,19 +11,35 @@ type Props = {
   onActiveChange: (uri: string | null) => void;
 };
 
+function normalizePlaybackUri(uri: string): string {
+  if (
+    uri.startsWith('file://') ||
+    uri.startsWith('http://') ||
+    uri.startsWith('https://') ||
+    uri.startsWith('content://')
+  ) {
+    return uri;
+  }
+  return `file://${uri}`;
+}
+
 export function SegmentPlayButton({ uri, activeUri, onActiveChange }: Props) {
   const [playing, setPlaying] = useState(false);
   const playerRef = useRef<AudioPlayer | null>(null);
 
+  const releasePlayer = () => {
+    try {
+      playerRef.current?.pause();
+      playerRef.current?.remove();
+    } catch {
+      /* ignore */
+    }
+    playerRef.current = null;
+  };
+
   useEffect(() => {
     return () => {
-      try {
-        playerRef.current?.pause();
-        playerRef.current?.remove();
-      } catch {
-        /* ignore */
-      }
-      playerRef.current = null;
+      releasePlayer();
     };
   }, []);
 
@@ -56,29 +72,35 @@ export function SegmentPlayButton({ uri, activeUri, onActiveChange }: Props) {
       // Stop any other clip first.
       onActiveChange(uri);
 
+      // Switch out of mic/session category so iOS uses the loudspeaker.
       await enterPlaybackAudioMode();
+      // Recreate player after mode change — reused players keep the old route.
+      releasePlayer();
 
-      let active = playerRef.current;
-      if (!active) {
-        active = createAudioPlayer({ uri }, { updateInterval: 200 });
-        playerRef.current = active;
-        active.addListener('playbackStatusUpdate', (status) => {
-          if (status.didJustFinish) {
-            setPlaying(false);
-            onActiveChange(null);
-          } else {
-            setPlaying(status.playing);
-          }
-        });
-      } else {
-        await active.seekTo(0);
-      }
-      active.volume = getOutputVolume();
+      const sourceUri = normalizePlaybackUri(uri);
+      const active = createAudioPlayer({ uri: sourceUri }, { updateInterval: 200 });
+      playerRef.current = active;
+      active.addListener('playbackStatusUpdate', (status) => {
+        if (status.error) {
+          setPlaying(false);
+          onActiveChange(null);
+          return;
+        }
+        if (status.didJustFinish) {
+          setPlaying(false);
+          onActiveChange(null);
+        } else {
+          setPlaying(status.playing);
+        }
+      });
+      active.volume = Math.max(0.05, getOutputVolume());
       active.play();
       setPlaying(true);
-    } catch {
+    } catch (e) {
+      releasePlayer();
       setPlaying(false);
       onActiveChange(null);
+      Alert.alert('无法播放', e instanceof Error ? e.message : '请检查录音文件后重试');
     }
   };
 

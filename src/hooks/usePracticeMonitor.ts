@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { AppState, type AppStateStatus } from 'react-native';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -18,6 +19,7 @@ import {
 } from '../coach/practiceCoach';
 import { speakCoach, stopCoachSpeech } from '../coach/speech';
 import { PracticeEngine } from '../practice/engine';
+import { saveDraft } from '../storage/draft';
 import type { AppSettings, ClassifyResult, PracticeSession, SoundKind } from '../types';
 
 export type MonitorSnapshot = {
@@ -45,6 +47,10 @@ const EMPTY: MonitorSnapshot = {
   usingFallback: false,
   coachLine: null,
 };
+
+const DRAFT_INTERVAL_MS = 5_000;
+/** Skip tiny accidental drafts. */
+const DRAFT_MIN_EFFECTIVE_MS = 1_500;
 
 export function usePracticeMonitor(settings: AppSettings) {
   const engineRef = useRef(new PracticeEngine());
@@ -80,6 +86,37 @@ export function usePracticeMonitor(settings: AppSettings) {
   const [running, setRunning] = useState(false);
   const [snapshot, setSnapshot] = useState<MonitorSnapshot>(EMPTY);
   const [error, setError] = useState<string | null>(null);
+  const draftBusyRef = useRef(false);
+
+  const persistDraft = useCallback(async () => {
+    if (!runningRef.current || draftBusyRef.current) return;
+    draftBusyRef.current = true;
+    try {
+      const now = Date.now();
+      const bout = engineRef.current.checkpoint(now, 'violin');
+      if (bout.effectiveMs < DRAFT_MIN_EFFECTIVE_MS) return;
+
+      let segments = bout.segments;
+      if (!fallbackRef.current) {
+        try {
+          segments = await captureRef.current.checkpointClips(bout.segments);
+        } catch {
+          /* keep segments without new clips */
+        }
+      }
+
+      await saveDraft({
+        ...bout,
+        segments,
+        sessionId: sessionIdRef.current || String(bout.startedAt),
+        savedAt: now,
+      });
+    } catch {
+      /* ignore draft failures */
+    } finally {
+      draftBusyRef.current = false;
+    }
+  }, []);
 
   const onBuffer = useCallback((buffer: AudioStreamBuffer) => {
     if (!runningRef.current || fallbackRef.current || coachSpeakingRef.current) return;
@@ -243,6 +280,26 @@ export function usePracticeMonitor(settings: AppSettings) {
     return () => clearInterval(id);
   }, [running, announceCoach]);
 
+  // Periodic + background checkpoint so kill/swipe-away does not lose time.
+  useEffect(() => {
+    if (!running) return;
+
+    const onAppState = (next: AppStateStatus) => {
+      if (next === 'background' || next === 'inactive') {
+        void persistDraft();
+      }
+    };
+    const sub = AppState.addEventListener('change', onAppState);
+    const id = setInterval(() => {
+      void persistDraft();
+    }, DRAFT_INTERVAL_MS);
+
+    return () => {
+      sub.remove();
+      clearInterval(id);
+    };
+  }, [running, persistDraft]);
+
   const start = useCallback(async () => {
     setError(null);
     const perm = await requestRecordingPermissionsAsync();
@@ -359,9 +416,23 @@ export function usePracticeMonitor(settings: AppSettings) {
       }
     }
 
+    const finished = { ...session, id: sessionIdRef.current || session.id, segments };
+    // Keep a final draft until App.tsx persists + clearDraft (covers crash between stop and save).
+    if (finished.effectiveMs >= DRAFT_MIN_EFFECTIVE_MS) {
+      try {
+        await saveDraft({
+          ...finished,
+          sessionId: sessionIdRef.current || String(finished.startedAt),
+          savedAt: Date.now(),
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+
     setRunning(false);
     setSnapshot(EMPTY);
-    return { ...session, id: sessionIdRef.current || session.id, segments };
+    return finished;
   }, [recorder, stream]);
 
   return { running, snapshot, error, start, stop, setError };

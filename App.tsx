@@ -19,6 +19,7 @@ import {
   saveSession,
   settlePendingSessions,
 } from './src/storage/history';
+import { clearDraft, takeDraft } from './src/storage/draft';
 import { loadSettings, saveSettings } from './src/storage/settings';
 import { setOutputVolume } from './src/audio/audioMode';
 import { shareDayReport } from './src/history/shareReport';
@@ -96,6 +97,40 @@ export default function App() {
         s.dailyMoneyCap,
         s.moneyMinMinutes
       );
+
+      // Recover bout that was interrupted by kill / swipe-away.
+      const draft = await takeDraft();
+      if (draft && draft.effectiveMs >= 1_500) {
+        try {
+          const day = rescored.find(
+            (s) => dayKey(s.startedAt) === dayKey(draft.startedAt)
+          );
+          // Already merged by a completed stop that failed to clear the draft.
+          const alreadySaved =
+            !!day &&
+            (day.updatedAt ?? 0) >= draft.savedAt &&
+            day.effectiveMs >= draft.effectiveMs - 500;
+          if (!alreadySaved) {
+            const recovered = await saveSession(
+              {
+                ...draft,
+                boutCount: 1,
+              },
+              s.dailyTargetMinutes,
+              s.dailyMoneyCap,
+              s.moneyMinMinutes
+            );
+            setSessions(recovered);
+            Alert.alert(
+              '已恢复练习',
+              `上次未正常结束的练琴已保存，有效时长 ${Math.round(draft.effectiveMs / 1000)} 秒。`
+            );
+            return;
+          }
+        } catch {
+          /* fall through to rescored */
+        }
+      }
       setSessions(rescored);
     })();
   }, []);
@@ -159,6 +194,7 @@ export default function App() {
           settings.dailyMoneyCap,
           settings.moneyMinMinutes
         );
+        await clearDraft();
         setSessions(next);
         if (accountEmail && isFirebaseConfigured()) {
           void syncPracticeRecords(next).catch(() => undefined);
@@ -170,6 +206,7 @@ export default function App() {
         setScreen({ name: 'summary', session: saved });
       } else {
         void notifyPracticeStopped(0);
+        await clearDraft();
       }
       return;
     }

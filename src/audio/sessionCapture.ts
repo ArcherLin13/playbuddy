@@ -110,6 +110,12 @@ export class SessionAudioCapture {
     this.finishedUris = [];
     return attachClipsInOrder(segments, uris);
   }
+
+  /** Persist open clip to disk for crash recovery; keep session listening. */
+  async checkpointClips(segments: PracticeSegment[]): Promise<PracticeSegment[]> {
+    await this.stopClip();
+    return attachClipsInOrder(segments, [...this.finishedUris]);
+  }
 }
 
 export async function deleteSessionRecordings(sessionId: string, segments: PracticeSegment[]): Promise<void> {

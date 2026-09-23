@@ -36,12 +36,13 @@ export async function prepareCoachSpeechAudioMode(): Promise<void> {
   });
 }
 
-/** Normal media playback — hardware volume buttons control media volume. */
+/** Normal media playback — hardware volume buttons control media volume / loudspeaker. */
 export async function enterPlaybackAudioMode(): Promise<void> {
+  // Leave playAndRecord first so iOS re-routes away from the earpiece path.
   await setAudioModeAsync({
     allowsRecording: false,
     playsInSilentMode: true,
-    interruptionMode: 'mixWithOthers',
+    interruptionMode: 'doNotMix',
     shouldRouteThroughEarpiece: false,
     shouldPlayInBackground: false,
   });
