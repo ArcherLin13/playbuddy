@@ -9,6 +9,11 @@ export type EngineSnapshot = {
   startedAt: number;
   /** Effective sounding time inside the current open segment. */
   continuousMs: number;
+  /**
+   * Layer-2: this tick closed a segment because silence reached SILENCE_GAP_MS.
+   * Recording should cut only when this is true (not on 5s classifier dips).
+   */
+  segmentClosed: boolean;
 };
 
 export class PracticeEngine {
@@ -42,6 +47,7 @@ export class PracticeEngine {
     const rawDt = now - this.lastTickAt;
     const dt = Math.max(0, Math.min(rawDt, 250));
     this.lastTickAt = now;
+    let segmentClosed = false;
 
     if (isPlaying) {
       if (this.currentStart == null) this.currentStart = now;
@@ -51,10 +57,11 @@ export class PracticeEngine {
     } else if (this.currentStart != null && this.lastPlayingAt != null) {
       if (now - this.lastPlayingAt >= this.gapMs) {
         this.closeCurrent(this.lastPlayingAt);
+        segmentClosed = true;
       }
     }
 
-    return this.snapshot(now);
+    return this.snapshot(now, segmentClosed);
   }
 
   stop(now: number, instrument: Instrument): PracticeSession {
@@ -99,7 +106,7 @@ export class PracticeEngine {
     };
   }
 
-  snapshot(now: number = this.lastTickAt): EngineSnapshot {
+  snapshot(now: number = this.lastTickAt, segmentClosed = false): EngineSnapshot {
     const quietMs =
       this.lastPlayingAt == null
         ? now - this.startedAt
@@ -112,6 +119,7 @@ export class PracticeEngine {
       quietMs,
       startedAt: this.startedAt,
       continuousMs: this.currentSoundingMs,
+      segmentClosed,
     };
   }
 

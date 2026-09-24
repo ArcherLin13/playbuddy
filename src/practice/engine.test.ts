@@ -46,12 +46,26 @@ describe('PracticeEngine', () => {
     e.tick(t, true);
     const sounding = e.snapshot(t).effectiveMs;
     t += 60_000;
-    e.tick(t, false);
+    const closed = e.tick(t, false);
+    assert.equal(closed.segmentClosed, true);
+    assert.equal(closed.currentStart, null);
     const session = e.stop(t + 500, 'violin');
     assert.equal(session.segments.length, 1);
     assert.equal(session.segments[0].durationMs, sounding);
     assert.equal(session.effectiveMs, sounding);
     assert.ok(session.effectiveMs < 1000);
+  });
+
+  it('does not report segmentClosed during a short pause', () => {
+    const e = new PracticeEngine(60_000);
+    let t = 1_000;
+    e.start(t);
+    t += 100;
+    e.tick(t, true);
+    t += 20_000;
+    const snap = e.tick(t, false);
+    assert.equal(snap.segmentClosed, false);
+    assert.ok(snap.currentStart != null);
   });
 
   it('starts a new segment after a long gap', () => {

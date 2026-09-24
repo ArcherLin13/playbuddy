@@ -2,12 +2,15 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { encodeWavMono16, floatToInt16 } from './wav';
 import type { PracticeSegment } from '../types';
 
-/** Keep recording a bit after playing ends. */
-export const RECORD_STOP_HANGOVER_MS = 1200;
-/** Include a little audio before trigger. */
+/** Include a little audio before the segment opens. */
 const PRE_ROLL_MS = 450;
 const MAX_CLIP_SEC = 20 * 60;
 
+/**
+ * Captures one wav per practice segment.
+ * Start when the engine opens a segment; stop only when the engine closes it
+ * (1 minute without playing) — not when the 5s classifier briefly says "not playing".
+ */
 export class SessionAudioCapture {
   private sampleRate = 16000;
   private recording = false;
@@ -111,9 +114,11 @@ export class SessionAudioCapture {
     return attachClipsInOrder(segments, uris);
   }
 
-  /** Persist open clip to disk for crash recovery; keep session listening. */
-  async checkpointClips(segments: PracticeSegment[]): Promise<PracticeSegment[]> {
-    await this.stopClip();
+  /**
+   * Attach already-finished clips for draft recovery.
+   * Does NOT stop the open clip — mid-segment flush was chopping recordings into ~1–5s pieces.
+   */
+  peekFinishedClips(segments: PracticeSegment[]): PracticeSegment[] {
     return attachClipsInOrder(segments, [...this.finishedUris]);
   }
 }

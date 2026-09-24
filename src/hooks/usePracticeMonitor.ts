@@ -12,7 +12,7 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { AudioAnalyzer } from '../audio/analyzer';
 import { enterPlaybackAudioMode, enterRecordingAudioMode } from '../audio/audioMode';
 import { classifyMeterEnvelope, KindSmoother, SoundClassifier } from '../audio/classifier';
-import { RECORD_STOP_HANGOVER_MS, SessionAudioCapture } from '../audio/sessionCapture';
+import { SessionAudioCapture } from '../audio/sessionCapture';
 import {
   createCoachState,
   tickCoach,
@@ -75,7 +75,6 @@ export function usePracticeMonitor(settings: AppSettings) {
   });
   const lastAtRef = useRef(0);
   const lastPlayingAtRef = useRef(0);
-  const lastRecordWantRef = useRef(0);
   const stoppingClipRef = useRef(false);
   const runningRef = useRef(false);
   const fallbackRef = useRef(false);
@@ -96,14 +95,10 @@ export function usePracticeMonitor(settings: AppSettings) {
       const bout = engineRef.current.checkpoint(now, 'violin');
       if (bout.effectiveMs < DRAFT_MIN_EFFECTIVE_MS) return;
 
-      let segments = bout.segments;
-      if (!fallbackRef.current) {
-        try {
-          segments = await captureRef.current.checkpointClips(bout.segments);
-        } catch {
-          /* keep segments without new clips */
-        }
-      }
+      // Only attach clips that already closed with a segment — never stopClip here.
+      const segments = fallbackRef.current
+        ? bout.segments
+        : captureRef.current.peekFinishedClips(bout.segments);
 
       await saveDraft({
         ...bout,
@@ -229,18 +224,14 @@ export function usePracticeMonitor(settings: AppSettings) {
             : kind;
       const snap = engineRef.current.tick(now, playing);
 
-      // Triggered recording: start on playing, stop shortly after playing ends.
+      // Two layers:
+      // 1) `playing` from 5s classifier → effective time + UI only
+      // 2) engine segment open/close (1 min full interrupt) → cut recording into one clip
       if (!fallbackRef.current) {
-        if (playing) {
-          lastRecordWantRef.current = now;
-          if (!captureRef.current.isRecording) {
-            captureRef.current.startClip();
-          }
-        } else if (
-          captureRef.current.isRecording &&
-          now - lastRecordWantRef.current >= RECORD_STOP_HANGOVER_MS &&
-          !stoppingClipRef.current
-        ) {
+        if (snap.currentStart != null && !captureRef.current.isRecording) {
+          captureRef.current.startClip();
+        }
+        if (snap.segmentClosed && captureRef.current.isRecording && !stoppingClipRef.current) {
           stoppingClipRef.current = true;
           void captureRef.current.stopClip().finally(() => {
             stoppingClipRef.current = false;
@@ -333,7 +324,6 @@ export function usePracticeMonitor(settings: AppSettings) {
     };
     lastAtRef.current = startedAt;
     lastPlayingAtRef.current = 0;
-    lastRecordWantRef.current = 0;
     stoppingClipRef.current = false;
     meterHistRef.current = [];
     runningRef.current = true;
